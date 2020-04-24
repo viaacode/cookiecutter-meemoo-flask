@@ -1,0 +1,15 @@
+{
+    "project_name": "Python Project",
+    "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '-').replace('_', '-') }}",
+    "organization": "meemoo",
+    "python_version": "3.6",
+    "dockerfile_stages": [
+        "single",
+        "multi"
+    ],
+    "open_source_license": [
+        "MIT",
+        "BSD",
+        "Not open source"
+    ]
+}

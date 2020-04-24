@@ -1,0 +1,81 @@
+FROM python:{{cookiecutter.python_version}}-slim as builder
+
+# Install external build dependencies.
+# RUN apt-get install --no-install-recommends -y
+
+# Applications should run on port 8080 so NGINX can auto discover them.
+EXPOSE 8080
+
+# Make a new group and user so we don't run as root.
+RUN addgroup --system appgroup && adduser --system appuser --ingroup appgroup
+
+WORKDIR /app
+COPY requirements.txt requirements.txt
+
+# Create the virtual environment 
+RUN python3 -m venv ./venv
+
+# Install gcc and libc6-dev to be able to compile uWSGI
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y gcc libc6-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# We install all our Python dependencies. Add the extra index url because some
+# packages are in the meemoo repo.
+RUN ./venv/bin/python3 -m pip install -r requirements.txt \
+    --extra-index-url http://do-prd-mvn-01.do.viaa.be:8081/repository/pypi-all/simple \
+    --trusted-host do-prd-mvn-01.do.viaa.be
+
+
+# Create image which will actually run
+FROM python:{{cookiecutter.python_version}}-slim as app
+
+# Install external build/runtime dependencies for running.
+# RUN apt-get install --no-install-recommends -y
+
+WORKDIR /app
+# Copy the virtual environment from the builder image
+COPY --from=builder /app/venv/ /app/venv/
+
+# Applications should run on port 8080 so NGINX can auto discover them.
+EXPOSE 8080
+
+# Make a new group and user so we don't run as root.
+RUN addgroup --system appgroup && adduser --system appuser --ingroup appgroup
+
+# Let the appuser own the files so he can rwx during runtime.
+COPY . .
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# This command will be run when starting the container. It is the same one that
+# can be used to run the application locally.
+ENTRYPOINT [ "uwsgi", "-i", "uwsgi.ini"]
+
+
+# Create image which will run the tests
+FROM app as test
+
+# Install external build/runtime dependencies for testing.
+# RUN apt-get install --no-install-recommends -y
+
+# Install pip testing packages
+RUN ./venv/bin/python3 -m pip install -r requirements-test.txt
+
+ENTRYPOINT ["./venv/bin/python3"]
+CMD ["-m", "pytest", "--cov=app.app"]
+
+
+# Create image which will run the linter
+FROM python:{{cookiecutter.python_version}}-slim as lint
+
+# Change workdir
+WORKDIR /app
+COPY . .
+
+# Install flake8
+RUN python3 -m pip install flake8
+
+ENTRYPOINT ["flake8"]
+CMD ["--exit-zero", "--max-line-length=88", "--exclude=./venv"]

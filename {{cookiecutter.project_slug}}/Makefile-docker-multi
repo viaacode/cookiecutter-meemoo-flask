@@ -1,0 +1,22 @@
+.ONESHELL:
+SHELL = /bin/bash
+
+.PHONY: build app test lint
+
+VERSION = latest
+APP_NAME = {{cookiecutter.project_slug}}
+
+build:
+	docker build --target builder -t "${APP_NAME}_builder:${VERSION}" .
+	docker build --target app -t "${APP_NAME}_app:${VERSION}" .
+	docker build --target test -t "${APP_NAME}_test:${VERSION}" .
+	docker build --target lint -t "${APP_NAME}_lint:${VERSION}" .
+
+app:
+	docker run -p 8080:8080 --rm "${APP_NAME}:${VERSION}"
+
+test:
+	docker run --name "${APP_NAME}_test" "${APP_NAME}_test:${VERSION}"
+
+lint:
+	docker run --name "${APP_NAME}_lint" "${APP_NAME}_lint:${VERSION}"
